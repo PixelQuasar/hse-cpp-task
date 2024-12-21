@@ -10,3 +10,10 @@ compile_commands.json
 CTestTestfile.cmake
 _deps
 CMakeUserPresets.json
+cmake-build-debug
+cmmake-build-release
+build
+.vscode
+.idea
+*.cmake
+main
