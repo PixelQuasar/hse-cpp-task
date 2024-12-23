@@ -15,12 +15,12 @@ template <size_t N, size_t K>
 struct FastFixed {
   static_assert(N > K, "N must be greater than K");
 
-  using StorageType = typename std::conditional<
+  using StorageType = typename std::conditional_t<
       (N <= 8), int_fast8_t,
-      typename std::conditional<
+       std::conditional_t<
           (N <= 16), int_fast16_t,
-          typename std::conditional<(N <= 32), int_fast32_t,
-                                    int_fast64_t>::type>::type>::type;
+           std::conditional_t<(N <= 32), int_fast32_t,
+                                    int_fast64_t>>>;
 
   StorageType v;
 

@@ -13,8 +13,13 @@ struct FastFixed;
 
 template <size_t N, size_t K>
 struct Fixed {
-  using StorageType =
-      typename std::conditional<N <= 32, int32_t, int64_t>::type;
+  using StorageType = typename std::conditional_t<
+      (N <= 8), int8_t,
+      std::conditional_t<
+          (N <= 16), int16_t,
+          std::conditional_t<
+              (N <= 32), int32_t,
+              std::conditional_t<(N <= 64), int64_t, __int128>>>>;
 
   constexpr Fixed() : v(0) {}
 

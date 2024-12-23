@@ -6,57 +6,88 @@
 #include <sstream>
 #include <string>
 
-using namespace std;
+#include "utils.h"
 
-constexpr size_t DEFAULT_N = 36, DEFAULT_M = 84;
+using namespace std;
 
 template <typename NumericType, size_t N, size_t M>
 struct VectorField {
-    static constexpr std::array<pair<int, int>, 4> deltas{
-            {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}};
-    array<NumericType, 4> v[N][M];
+  static constexpr std::array<pair<int, int>, 4> deltas{
+      {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}};
+  MatrixType<array<NumericType, 4>, N, M> v{};
 
-    NumericType& add(int x, int y, int dx, int dy, NumericType dv) {
-        return get(x, y, dx, dy) += dv;
-    }
+  NumericType& add(int x, int y, int dx, int dy, NumericType dv) {
+    return get(x, y, dx, dy) += dv;
+  }
 
-    NumericType& get(int x, int y, int dx, int dy) {
-        size_t i = ranges::find(deltas, pair(dx, dy)) - deltas.begin();
-        assert(i < deltas.size());
-        return v[x][y][i];
-    }
+  NumericType& get(int x, int y, int dx, int dy) {
+    size_t i = ranges::find(deltas, pair(dx, dy)) - deltas.begin();
+    assert(i < deltas.size());
+    return v[x][y][i];
+  }
 };
 
 template <typename PressureType, typename VelocityType, typename VFlowType,
-        size_t N = DEFAULT_N, size_t M = DEFAULT_M>
+          size_t N = DEFAULT_N, size_t M = DEFAULT_M>
 struct SimulationState {
-    PressureType rho[256];
-    PressureType p[N][M]{};
-    PressureType old_p[N][M]{};
+  PressureType rho[256];
+  MatrixType<PressureType, N, M> p{};
+  MatrixType<PressureType, N, M> old_p{};
 
-    char field[N][M + 1];
-    int last_use[N][M]{};
-    int UT{0};
-    mt19937 rnd{1337};
-    int dirs[N][M]{};
+  MatrixType<char, N, M + 1> field{};
+  MatrixType<int, N, M> last_use{};
+  int UT{0};
+  mt19937 rnd{1337};
+  MatrixType<int, N, M> dirs{};
 
-    VectorField<VelocityType, N, M> velocity{};
-    VectorField<VFlowType, N, M> velocity_flow{};
+  VectorField<VelocityType, N, M> velocity{};
+  VectorField<VFlowType, N, M> velocity_flow{};
 
-    SimulationState(const string& field_content) {
-        stringstream ss(field_content);
-        string line;
-        size_t row = 0;
-        while (getline(ss, line) && row < N) {
-            size_t col = 0;
-            while (col < M && col < line.length()) {
-                field[row][col] = line[col];
-                col++;
-            }
-            field[row][col] = '\0';
-            row++;
+  SimulationState(const std::vector<std::string>& initial_field = {}) {
+    if constexpr (N == dynamic_size || M == dynamic_size) {
+      if (!initial_field.empty()) {
+        size_t n = initial_field.size();
+        size_t m = initial_field[0].size();
+
+        field.resize(n);
+        for (auto& row : field) {
+          row.resize(m + 1);
         }
+        p.resize(n);
+        for (auto& row : p) {
+          row.resize(m);
+        }
+        old_p.resize(n);
+        for (auto& row : old_p) {
+          row.resize(m);
+        }
+        last_use.resize(n);
+        for (auto& row : last_use) {
+          row.resize(m);
+        }
+        dirs.resize(n);
+        for (auto& row : dirs) {
+          row.resize(m);
+        }
+        for (size_t i = 0; i < n; ++i) {
+          for (size_t j = 0; j < m; ++j) {
+            field[i][j] = initial_field[i][j];
+          }
+        }
+      }
+    } else {
+      if (!initial_field.empty()) {
+        if (initial_field.size() != N || initial_field[0].size() != M) {
+          throw std::runtime_error("Field size mismatch");
+        }
+        for (size_t i = 0; i < N; ++i) {
+          for (size_t j = 0; j < M; ++j) {
+            field[i][j] = initial_field[i][j];
+          }
+        }
+      }
     }
+  }
 };
 
 #endif

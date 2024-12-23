@@ -7,6 +7,16 @@
 
 using namespace std;
 
+constexpr size_t DEFAULT_N = 36, DEFAULT_M = 84;
+constexpr size_t dynamic_size = std::numeric_limits<size_t>::max();
+
+template<typename T, size_t N = dynamic_size, size_t M = dynamic_size>
+using MatrixType = std::conditional_t<N == dynamic_size || M == dynamic_size,
+        std::vector<std::vector<T>>,
+        std::array<std::array<T, M + (std::is_same_v<T, char> ? 1 : 0)>, N>
+>;
+
+
 bool has_arg(string_view arg_name, int argc, char** argv) {
   for (int i = 1; i < argc; ++i) {
     if (argv[i] == arg_name) {
