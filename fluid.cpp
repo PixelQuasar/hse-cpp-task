@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <iostream>
@@ -12,7 +13,7 @@ using namespace std;
 
 constexpr size_t N = 36, M = 84;
 // constexpr size_t N = 14, M = 5;
-constexpr size_t T = 1'000'000;
+constexpr size_t T = 200;
 constexpr std::array<pair<int, int>, 4> deltas{
     {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}};
 
@@ -339,6 +340,8 @@ bool propagate_move(int x, int y, bool is_first) {
 int dirs[N][M]{};
 
 int main() {
+  auto start = chrono::high_resolution_clock::now();
+
   rho[' '] = 0.01;
   rho['.'] = 1000;
   Fixed g = 0.1;
@@ -451,4 +454,9 @@ int main() {
       }
     }
   }
+
+  auto end = chrono::high_resolution_clock::now();
+  auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+
+  cout << "Time taken by run: " << duration.count() << " milliseconds" << endl;
 }

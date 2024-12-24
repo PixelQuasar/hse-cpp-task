@@ -20,6 +20,8 @@
 #include "state.h"
 #include "utils.h"
 
+#pragma optimize("O3")
+
 using namespace std;
 
 vector<string> get_field_from_file(const string& filename) {
@@ -326,6 +328,7 @@ int main(int argc, char** argv) {
   try {
     create_and_run_simulation(p_type, v_type, v_flow_type, size.n, size.m);
   } catch (const std::exception& e) {
+    cout << e.what() << "\n";
     return 1;
   }
 

@@ -5,6 +5,7 @@
 #include <array>
 #include <atomic>
 #include <cassert>
+#include <chrono>
 #include <iostream>
 #include <random>
 #include <thread>
@@ -32,39 +33,39 @@ template <typename T>
 class SafeQueue {
  public:
   void push(const T& value) {
-    if (m_queue.size() >= limit) {
+    if (queue.size() >= limit) {
       return;
     }
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_queue.push(value);
-    m_cond.notify_one();
+    std::lock_guard<std::mutex> lock(mutex);
+    queue.push(value);
+    cond.notify_one();
   }
 
   bool pop(T& value) {
-    std::unique_lock<std::mutex> lock(m_mutex);
-    m_cond.wait(lock, [this] { return !m_queue.empty() || m_stop; });
+    std::unique_lock<std::mutex> lock(mutex);
+    cond.wait(lock, [this] { return !queue.empty() || stop_value; });
 
-    if (m_stop && m_queue.empty()) {
+    if (stop_value && queue.empty()) {
       return false;
     }
 
-    value = m_queue.front();
-    m_queue.pop();
+    value = queue.front();
+    queue.pop();
     return true;
   }
 
   void stop() {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_stop = true;
-    m_cond.notify_all();
+    std::lock_guard<std::mutex> lock(mutex);
+    stop_value = true;
+    cond.notify_all();
   }
 
  private:
-  std::queue<T> m_queue;
-  std::mutex m_mutex;
-  std::condition_variable m_cond;
+  std::queue<T> queue;
+  std::mutex mutex;
+  std::condition_variable cond;
   size_t limit = 1024;
-  bool m_stop{false};
+  bool stop_value = false;
 };
 
 template <class PressureType, class VelocityType, class VFlowType,
@@ -116,15 +117,18 @@ class Simulator {
   }
 
   void run() {
+    const bool active = true;
     std::thread random_gen([this]() {
-      while (!this->done) {
+      while (active) {
         VelocityType val = VelocityType(
             static_cast<double>(rnd() & ((1 << 16) - 1)) / (1 << 16));
 
         this->safeQueue.push(val);
       }
-      safeQueue.stop();
     });
+
+    // time stamps
+    auto start = chrono::high_resolution_clock::now();
 
     PressureType g = PressureType(0.1);
 
@@ -134,6 +138,7 @@ class Simulator {
       // Apply external forces
       for (size_t x = 0; x < get_n(); ++x) {
         for (size_t y = 0; y < get_m(); ++y) {
+          // << "3" << endl;
           if (field[x][y] == '#') continue;
           if (field[x + 1][y] != '#') velocity.add(x, y, 1, 0, VelocityType(g));
         }
@@ -192,6 +197,7 @@ class Simulator {
             auto new_v = velocity_flow.get(x, y, dx, dy);
             if (old_v > VelocityType(0)) {
               assert(new_v <= old_v);
+
               velocity.get(x, y, dx, dy) = new_v;
               auto force = to_pressure(old_v - new_v) * rho[(int)field[x][y]];
               if (field[x][y] == '.') force *= PressureType(0.8);
@@ -233,11 +239,17 @@ class Simulator {
       }
     }
 
+    auto end = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+
+    cout << "Time taken by run: " << duration.count() << " milliseconds"
+         << endl;
+
     random_gen.join();
   }
 
  private:
-  static constexpr size_t T = 1'000'000;
+  static constexpr size_t T = 200;
 
   SafeQueue<VelocityType> safeQueue;
   std::atomic<bool> done = std::atomic<bool>(false);
