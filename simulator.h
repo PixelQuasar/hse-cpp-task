@@ -116,9 +116,7 @@ class Simulator {
   }
 
   void run() {
-    mt19937 rnd{1337};
-
-    std::thread random_gen([&rnd, this]() {
+    std::thread random_gen([this]() {
       while (!this->done) {
         VelocityType val = VelocityType(
             static_cast<double>(rnd() & ((1 << 16) - 1)) / (1 << 16));
@@ -214,8 +212,8 @@ class Simulator {
       for (size_t x = 0; x < get_n(); ++x) {
         for (size_t y = 0; y < get_m(); ++y) {
           if (field[x][y] != '#' && last_use[x][y] != UT) {
-            VelocityType value = random01();
-            // safeQueue.pop(value);
+            VelocityType value;
+            safeQueue.pop(value);
             if (value < move_prob(x, y)) {
               prop = true;
               propagate_move(x, y, true);
@@ -243,6 +241,8 @@ class Simulator {
 
   SafeQueue<VelocityType> safeQueue;
   std::atomic<bool> done = std::atomic<bool>(false);
+
+  mt19937 rnd{1337};
 
   static constexpr std::array<pair<int, int>, 4> deltas{
       {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}};
@@ -434,9 +434,8 @@ class Simulator {
 
       if (sum == VelocityType(0)) break;
 
-      VelocityType value = random01();
-
-      // safeQueue.pop(value);
+      VelocityType value;
+      safeQueue.pop(value);
 
       VelocityType p = value * sum;
       size_t d = ranges::upper_bound(tres, p) - tres.begin();

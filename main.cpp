@@ -237,9 +237,6 @@ struct TypeSelector {
                                const string& v_flow_type, size_t n, size_t m) {
     if (!matches_type<VF>(v_flow_type)) return false;
 
-    std::cerr << "Found matching types and about to create simulation"
-              << std::endl;
-
     if constexpr (AllowedSizes::size == 0) {
       run_simulation<P, V, VF>(n, m);
       return true;
@@ -263,10 +260,10 @@ struct TypeSelector {
   template <class P, class V, class VF, class CurrentSize>
   static bool try_with_size(const string& p_type, const string& v_type,
                             const string& v_flow_type, size_t n, size_t m) {
-    if (CurrentSize::n != n || CurrentSize::m != m) return false;
+    if (CurrentSize::n != n || CurrentSize::m != m) {
+      return false;
+    }
 
-    std::cerr << "Found matching size: " << CurrentSize::n << "x"
-              << CurrentSize::m << std::endl;
     run_simulation<P, V, VF, CurrentSize>(CurrentSize::n, CurrentSize::m);
     return true;
   }
@@ -329,7 +326,6 @@ int main(int argc, char** argv) {
   try {
     create_and_run_simulation(p_type, v_type, v_flow_type, size.n, size.m);
   } catch (const std::exception& e) {
-    cerr << "Failed to create simulation:\n" << e.what() << endl;
     return 1;
   }
 
