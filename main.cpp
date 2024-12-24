@@ -124,10 +124,8 @@ void run_simulation(size_t n = DEFAULT_N, size_t m = DEFAULT_M) {
     Simulator<P, V, VF, Size::n, Size::m> simulator(state);
 
     simulator.run();
-    std::cerr << "Simulation completed" << std::endl;
   } catch (const std::exception& e) {
-    std::cerr << "Exception in run_simulation: " << e.what() << std::endl;
-    throw;
+    throw std::runtime_error(e.what());
   }
 }
 

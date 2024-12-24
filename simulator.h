@@ -3,9 +3,11 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <iostream>
 #include <random>
+#include <thread>
 
 #include "fast_fixed.h"
 #include "fixed.h"
@@ -25,6 +27,45 @@ struct is_fast_fixed : std::false_type {};
 
 template <size_t N, size_t K>
 struct is_fast_fixed<FastFixed<N, K>> : std::true_type {};
+
+template <typename T>
+class SafeQueue {
+ public:
+  void push(const T& value) {
+    if (m_queue.size() >= limit) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_queue.push(value);
+    m_cond.notify_one();
+  }
+
+  bool pop(T& value) {
+    std::unique_lock<std::mutex> lock(m_mutex);
+    m_cond.wait(lock, [this] { return !m_queue.empty() || m_stop; });
+
+    if (m_stop && m_queue.empty()) {
+      return false;
+    }
+
+    value = m_queue.front();
+    m_queue.pop();
+    return true;
+  }
+
+  void stop() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_stop = true;
+    m_cond.notify_all();
+  }
+
+ private:
+  std::queue<T> m_queue;
+  std::mutex m_mutex;
+  std::condition_variable m_cond;
+  size_t limit = 1024;
+  bool m_stop{false};
+};
 
 template <class PressureType, class VelocityType, class VFlowType,
           size_t N = DEFAULT_N, size_t M = DEFAULT_M,
@@ -57,6 +98,11 @@ class Simulator {
     }
   }
 
+  VelocityType random01() {
+    return VelocityType(static_cast<double>(rnd() & ((1 << 16) - 1)) /
+                        (1 << 16));
+  }
+
   void init_state(const SimulationState<PressureType, VelocityType, VFlowType,
                                         N, M>& state) {
     field = state.field;
@@ -70,6 +116,18 @@ class Simulator {
   }
 
   void run() {
+    mt19937 rnd{1337};
+
+    std::thread random_gen([&rnd, this]() {
+      while (!this->done) {
+        VelocityType val = VelocityType(
+            static_cast<double>(rnd() & ((1 << 16) - 1)) / (1 << 16));
+
+        this->safeQueue.push(val);
+      }
+      safeQueue.stop();
+    });
+
     PressureType g = PressureType(0.1);
 
     for (size_t i = 0; i < T; ++i) {
@@ -156,7 +214,9 @@ class Simulator {
       for (size_t x = 0; x < get_n(); ++x) {
         for (size_t y = 0; y < get_m(); ++y) {
           if (field[x][y] != '#' && last_use[x][y] != UT) {
-            if (random01() < move_prob(x, y)) {
+            VelocityType value = random01();
+            // safeQueue.pop(value);
+            if (value < move_prob(x, y)) {
               prop = true;
               propagate_move(x, y, true);
             } else {
@@ -174,10 +234,15 @@ class Simulator {
         }
       }
     }
+
+    random_gen.join();
   }
 
  private:
   static constexpr size_t T = 1'000'000;
+
+  SafeQueue<VelocityType> safeQueue;
+  std::atomic<bool> done = std::atomic<bool>(false);
 
   static constexpr std::array<pair<int, int>, 4> deltas{
       {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}};
@@ -193,8 +258,6 @@ class Simulator {
   MatrixType<int, N, M> last_use{};
 
   int UT = 0;
-
-  mt19937 rnd{1337};
 
   PressureType rho[256];
 
@@ -281,8 +344,8 @@ class Simulator {
     }
   }
 
-  inline tuple<VelocityType, bool, pair<int, int>> propagate_flow(
-      int x, int y, VelocityType lim) {
+  tuple<VelocityType, bool, pair<int, int>> propagate_flow(int x, int y,
+                                                           VelocityType lim) {
     last_use[x][y] = UT - 1;
     VelocityType ret = 0;
     for (auto [dx, dy] : deltas) {
@@ -311,12 +374,7 @@ class Simulator {
     return {ret, false, {0, 0}};
   }
 
-  inline VelocityType random01() {
-    return VelocityType(static_cast<double>(rnd() & ((1 << 16) - 1)) /
-                        (1 << 16));
-  }
-
-  inline void propagate_stop(int x, int y, bool force = false) {
+  void propagate_stop(int x, int y, bool force = false) {
     if (!force) {
       bool stop = true;
       for (auto [dx, dy] : deltas) {
@@ -351,7 +409,7 @@ class Simulator {
     return sum;
   }
 
-  inline bool propagate_move(int x, int y, bool is_first) {
+  bool propagate_move(int x, int y, bool is_first) {
     last_use[x][y] = UT - is_first;
     bool ret = false;
     int nx = -1, ny = -1;
@@ -376,7 +434,11 @@ class Simulator {
 
       if (sum == VelocityType(0)) break;
 
-      VelocityType p = random01() * sum;
+      VelocityType value = random01();
+
+      // safeQueue.pop(value);
+
+      VelocityType p = value * sum;
       size_t d = ranges::upper_bound(tres, p) - tres.begin();
 
       auto [dx, dy] = deltas[d];
